@@ -1,0 +1,278 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Five Two Table</title><style>
+*{box-sizing:border-box}body{margin:0;background:#f4f6ef;color:#1e3128;font:16px/1.5 system-ui}header{background:#193e31;color:#fff;padding:25px max(5vw,calc((100vw - 1100px)/2)) 38px}header strong{letter-spacing:.15em;text-transform:uppercase;font-size:.85rem}h1{font:clamp(3rem,8vw,5.5rem)/1 Georgia;margin:24px 0 8px;letter-spacing:-.06em}p{margin:.4rem 0 .8rem}header p{color:#e3efdd;margin:0}main{max-width:1140px;margin:auto;padding:22px 20px 44px}section,details{background:#fff;border:1px solid #d8e1d4;padding:18px;border-radius:17px;margin-bottom:15px}h2{font:1.8rem Georgia;margin:0 0 .65rem}h3{font-size:1.05rem;margin:.6rem 0}.row{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}.actions{display:flex;gap:6px;flex-wrap:wrap}.week{display:grid;grid-template-columns:repeat(7,1fr);gap:7px;margin-top:12px}.layout{display:grid;grid-template-columns:1.45fr 1fr;gap:15px;align-items:start}.fields,.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:8px;margin:.65rem 0}label{display:block;font-size:.9rem;font-weight:650}button,input,select{font:inherit}input,select{width:100%;border:1px solid #91a798;background:white;border-radius:8px;padding:6px;color:inherit}button{background:#285543;color:white;border:1px solid transparent;border-radius:8px;padding:7px 11px;cursor:pointer;font-weight:650}button.alt,.week button{color:#244335;background:#f1f6ed;border-color:#d8e1d4}.week button{text-align:left}.week button.reduced,.notice{background:#f5ead5}.week button[aria-pressed=true]{color:white;background:#285543}small{color:#485d51;display:block}.week small{color:inherit}.metric{background:#f0f5e9;border-radius:10px;padding:9px}.metric:first-child{background:#e4efd5}.metric b{display:block;font-size:1.25rem}.entry{border-top:1px solid #d8e1d4;padding:9px 0}.notice{padding:9px;border-radius:8px}a{color:#285543}header a{color:#e3efdd}summary{cursor:pointer;font-weight:700}button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:3px solid #9a6c20;outline-offset:2px}[role=status]{color:#285543}@media(max-width:720px){.layout{grid-template-columns:1fr}.week{grid-template-columns:repeat(4,1fr)}}
+</style><header><div class="row"><strong>Five Two Table</strong><a href="#settings" id="open-settings">Plan settings</a></div><h1>5:2 meal planner</h1><p>Plan your week, log portions and compare your meals with your targets.</p></header><main>
+<section><div class="row"><div><h2>Your week</h2><span id="week-label"></span></div><div class="actions"><button class="alt" id="prev">Previous</button><button class="alt" id="current">This week</button><button class="alt" id="next">Next</button></div></div><div id="week" class="week"></div></section>
+<div class="layout"><section><h2 id="day-title"></h2><p id="day-note"></p><div id="entries"></div><form id="food-form"><h3 id="form-title">Log a food or meal</h3><div class="fields"><label>Food source<select id="preset"></select></label><label>Food name<input id="food-name" maxlength="100" required></label><label>Servings<input id="servings" type="number" min=".01" max="100" step=".01" value="1" required></label></div><small id="basis">Enter nutrition facts per serving.</small><div class="fields" id="food-values"></div><div class="actions"><button id="save-food">Add to log</button><button type="button" id="cancel-edit" class="alt" hidden>Cancel edit</button></div></form><p id="log-status" role="status"></p></section>
+<div><section><h2>Daily nutrition</h2><div id="metrics" class="metrics" aria-live="polite"></div><small>Totals use your logged portions. Nutrition for sample meals is estimated.</small></section>
+<section><h2>Meal ideas</h2><p>Preview a sample day or plan the entire week.</p><div class="actions"><button id="suggest">Suggest a day</button><button id="suggest-week" class="alt">Suggest a week</button></div><div id="ideas" aria-live="polite"></div></section></div></div>
+<details id="settings"><summary>Plan settings</summary><p>Choose two nonconsecutive reduced days and enter your own regular-day calorie and optional nutrient targets.</p><form id="settings-form"><div class="fields"><label>First reduced day<select id="fast1"></select></label><label>Second reduced day<select id="fast2"></select></label><label>Reduced-day calories<select id="fastTarget"><option value="">Choose a target</option><option value="500">500 kcal (guide’s example for women)</option><option value="600">600 kcal (guide’s example for men)</option><option value="custom">Custom</option></select></label><label id="custom-label" hidden>Custom reduced kcal<input type="number" id="customFast" min="500" max="4000"></label></div><p class="notice">Talk with a healthcare provider before starting. This approach may be unsuitable during pregnancy or breastfeeding, or with disordered eating, underweight, undernutrition, unmanaged diabetes or other chronic health conditions.</p><label><input id="confirmed" type="checkbox" style="width:auto"> I’ve confirmed that the reduced-day target is appropriate for me.</label><div id="target-fields"></div><button>Save settings</button><p id="settings-status" role="status"></p></form></details>
+<footer><p>Based on registered dietitian Julia Zumpano’s guidance in <a href="https://health.clevelandclinic.org/5-2-diet" target="_blank" rel="noopener">Cleveland Clinic’s 5:2 guide</a>.</p><small>Your food log and preferences stay in this browser. Food estimates vary by recipe and brand.</small></footer></main><script>"use strict";
+const $ = id => document.getElementById(id);
+const names = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+const metrics = [["Calories","kcal"],["Protein","g"],["Carbs","g"],["Fat","g"],["Fiber","g"]];
+// Approximate values per listed serving. Cooked weights unless specified.
+const foods = [
+ ["Chicken and vegetable soup","1 bowl (350 g)",235,27,18,6,5],
+ ["Cod and spinach","120 g cod + 150 g spinach",160,33,6,2,4],
+ ["Plain Greek yogurt and strawberries","170 g 0% yogurt + 100 g berries",132,18,14,1,2],
+ ["Egg and mushroom scramble","2 eggs + 100 g mushrooms, no oil",166,16,4,10,1],
+ ["Turkey and cucumber salad","100 g turkey + 150 g cucumber, lemon",160,30,6,2,1],
+ ["Tofu and broccoli","150 g firm tofu + 150 g broccoli, steamed",267,30,16,14,7],
+ ["Oats, yogurt and blueberries","60 g dry oats + 170 g yogurt + 100 g berries",385,27,61,5,8],
+ ["Egg, avocado and toast","2 eggs + 70 g avocado + 2 slices whole-grain toast",425,21,37,25,10],
+ ["Chicken quinoa bowl","120 g chicken + 185 g quinoa + 150 g veg + 1 tsp olive oil",513,48,51,13,9],
+ ["Lentil and brown rice bowl","200 g lentils + 150 g brown rice + 100 g veg + 1 tsp olive oil",495,24,87,7,20],
+ ["Salmon, broccoli and brown rice","150 g salmon + 180 g rice + 150 g broccoli",583,42,58,20,9],
+ ["Tofu, edamame and quinoa","150 g tofu + 100 g edamame + 185 g quinoa",559,46,52,24,13],
+ ["Apple and almonds","1 medium apple + 28 g almonds",259,7,31,14,8],
+ ["Banana and Greek yogurt","1 banana + 170 g 0% yogurt",205,18,33,1,3]
+];
+const key = "five-two-table-v1";
+const initial = {settings:{days:[0,3],targets:[[null,null,null,null,null],[null,null,null,null,null]],confirmed:false,fastChoice:""},log:{}};
+function load() {
+  try { return JSON.parse(localStorage.getItem(key)) || initial; } catch { return initial; }
+}
+let state = load();
+let selected = new Date();
+let editing = null;
+let suggestions = [];
+let storageFailed = false;
+function persist() {
+  try { localStorage.setItem(key,JSON.stringify(state)); } catch { storageFailed = true; }
+}
+function message(id,value) {
+  $(id).textContent = value + (storageFailed ? " Browser storage is unavailable. Changes will only last until reload." : "");
+}
+const fmt = new Intl.NumberFormat(undefined,{maximumFractionDigits:2});
+const dateFmt = new Intl.DateTimeFormat(undefined,{month:"short",day:"numeric",year:"numeric"});
+const longDate = new Intl.DateTimeFormat(undefined,{weekday:"long",month:"long",day:"numeric"});
+function dateKey(date) { return [date.getFullYear(),date.getMonth()+1,date.getDate()].join("-"); }
+function shift(date,n) { return new Date(date.getFullYear(),date.getMonth(),date.getDate()+n,12); }
+function weekday(date) { return (date.getDay()+6)%7; }
+function monday(date) { return shift(date,-weekday(date)); }
+function reduced(date) { return state.settings.days.includes(weekday(date)); }
+function target(date) { return state.settings.targets[Number(reduced(date))]; }
+function validDays(a,b) { return ![0,1,6].includes(Math.abs(a-b)); }
+function totals(rows) {
+  return metrics.map((_,index) => rows.reduce((sum,row) => sum + (row.values[index] ?? 0)*row.servings,0));
+}
+function template(i,servings=1) {
+  const [name,basis,...values] = foods[i];
+  return {name,basis,values,servings,preset:i};
+}
+function recommend(date) {
+  const goal = target(date)[0];
+  if (!goal || (reduced(date) && !state.settings.confirmed)) return null;
+  const menus = reduced(date)
+    ? [[0,1,2],[4,3,2],[5,1,2],[0,3,4],[5,4,2],[1,3,0],[4,1,5]]
+    : [[6,8,10,12],[7,9,11,13],[6,9,10,13],[7,8,11,12],[6,8,11,13],[7,9,10,12],[7,8,10,13]];
+  const ids = menus[weekday(date)];
+  const baseline = ids.reduce((sum,i) => sum + foods[i][2],0);
+  const scale = Math.round((goal / baseline)*100)/100;
+  return ids.map(i => template(i,scale));
+}
+function element(tag,value,cls) {
+  const el = document.createElement(tag);
+  el.textContent = value;
+  if (cls) el.className = cls;
+  return el;
+}
+function button(label,handler,cls="alt") {
+  const el = element("button",label,cls);
+  el.type = "button";
+  el.onclick = handler;
+  return el;
+}
+function showSettings() {
+  $("settings").open = true;
+  $("settings").scrollIntoView({block:"start"});
+}
+function render() {
+  const start = monday(selected);
+  $("week-label").textContent = dateFmt.formatRange(start,shift(start,6));
+  $("week").replaceChildren(...names.map((name,index) => {
+    const date = shift(start,index);
+    const day = button(name.slice(0,3)+" "+date.getDate(),() => selectDay(date),reduced(date)?"reduced":"");
+    day.setAttribute("aria-pressed",String(dateKey(date)===dateKey(selected)));
+    day.setAttribute("aria-label",longDate.format(date));
+    day.append(element("small",reduced(date)?"Reduced":"Regular"));
+    return day;
+  }));
+  $("day-title").textContent = longDate.format(selected);
+  const goals = target(selected);
+  const dayType = reduced(selected) ? "Reduced day" : "Regular day";
+  $("day-note").textContent = dayType + (goals[0] ? " · "+fmt.format(goals[0])+" kcal target" : " · Calorie target unset");
+  const rows = state.log[dateKey(selected)] ?? [];
+  $("entries").replaceChildren(...(rows.length ? rows.map(renderFood) : [element("p","No foods logged for this day.")]));
+  const sums = totals(rows);
+  $("metrics").replaceChildren(...metrics.map(([name,unit],i) => {
+    const card = element("div",name,"metric");
+    const unknown = rows.some(row => row.values[i]===null);
+    const goal = goals[i];
+    const difference = goal === null ? null : Math.round((sums[i]-goal)*100)/100;
+    card.append(element("b",fmt.format(sums[i])+" "+unit+(unknown?" known":"")));
+    const comparison = difference === null ? "Target unset" : unknown ? "Some nutrition values are missing" :
+      difference === 0 ? "At target" : fmt.format(Math.abs(difference))+" "+unit+(difference>0?" over":" under");
+    card.append(element("small",(goal===null?"":fmt.format(goal)+" "+unit+" target · ")+comparison));
+    return card;
+  }));
+}
+function renderFood(row,index) {
+  const line = element("div","","row entry");
+  const info = element("div",row.name);
+  const cals = row.values[0]*row.servings;
+  info.append(element("small",fmt.format(row.servings)+" × "+row.basis+" · "+fmt.format(cals)+" kcal"));
+  const actions = element("div","","actions");
+  actions.append(button("Edit",() => editFood(row,index)),button("Remove",() => {
+    state.log[dateKey(selected)].splice(index,1);
+    resetFood();
+    persist(); render(); message("log-status","Food removed.");
+  }));
+  line.append(info,actions);
+  return line;
+}
+function setFood(row) {
+  $("food-name").value = row.name;
+  $("basis").textContent = "Nutrition per serving · "+row.basis;
+  $("servings").value = row.servings;
+  row.values.forEach((value,i) => { $("food-"+i).value = value ?? ""; });
+}
+function editFood(row,index) {
+  editing = index;
+  $("preset").value = row.preset ?? "";
+  setFood(row);
+  $("form-title").textContent = "Edit food";
+  $("save-food").textContent = "Save changes";
+  $("cancel-edit").hidden = false;
+  $("servings").focus();
+}
+function resetFood() {
+  editing = null;
+  $("food-form").reset();
+  $("form-title").textContent = "Log a food or meal";
+  $("save-food").textContent = "Add to log";
+  $("cancel-edit").hidden = true;
+  $("basis").textContent = "Enter nutrition facts per serving. Nutrient fields are optional.";
+}
+function selectDay(date) {
+  selected = date;
+  resetFood();
+  $("log-status").textContent = "";
+  $("ideas").replaceChildren();
+  render();
+}
+function preview(week) {
+  const dates = week ? names.map((_,i) => shift(monday(selected),i)) : [selected];
+  suggestions = dates.map(date => ({date,meals:recommend(date)}));
+  const box = $("ideas");
+  box.replaceChildren();
+  for (const {date,meals} of suggestions) {
+    const block = element("div","","entry");
+    block.append(element("h3",longDate.format(date)));
+    if (!meals) {
+      block.append(element("p","Save a "+(reduced(date)?"confirmed reduced-day":"regular-day")+" calorie target to see meal ideas."),button("Open settings",showSettings));
+    } else {
+      const sum = totals(meals);
+      block.append(element("small",metrics.map(([name,unit],i) => (i===0?"":name+" ")+fmt.format(sum[i])+" "+unit).join(" · ")));
+      for (const meal of meals) {
+        const line = element("p",meal.name);
+        line.append(element("small",fmt.format(meal.servings)+" × ("+meal.basis+") · "+fmt.format(meal.values[0]*meal.servings)+" kcal"));
+        block.append(line);
+      }
+      const occupied = Boolean(state.log[dateKey(date)]?.length);
+      block.append(button(occupied?"Add meals to existing log":"Use this day",() => {
+        if (occupied && !window.confirm("Add these meals to the foods already logged for this day?")) return;
+        applyPlans([{date,meals}]);
+      }));
+    }
+    box.append(block);
+  }
+  if (week && suggestions.every(plan => plan.meals)) {
+    const empty = suggestions.filter(({date}) => !state.log[dateKey(date)]?.length);
+    if (empty.length) box.append(button("Fill "+empty.length+" empty days",() => applyPlans(empty),""));
+  }
+}
+function applyPlans(plans) {
+  for (const {date,meals} of plans) {
+    const day = dateKey(date);
+    state.log[day] = [...(state.log[day] ?? []),...meals];
+  }
+  persist();
+  selectDay(plans[0].date);
+  message("log-status",plans.length===1?"Sample meals added.":"Sample meals added to "+plans.length+" days.");
+}
+function number(id) { const value = $(id).value; return value === "" ? null : Number(value); }
+function nutrientInput(id,name,unit,required=false) {
+  const label = element("label",name+" ("+unit+")");
+  const input = element("input","");
+  Object.assign(input,{id,type:"number",min:"0",max:"10000",step:".01",required});
+  label.append(input);
+  return label;
+}
+function syncCustom() {
+  const custom = $("fastTarget").value==="custom";
+  $("custom-label").hidden = !custom;
+  $("customFast").disabled = !custom;
+  $("customFast").required = custom;
+}
+$("preset").append(new Option("Custom food",""),...foods.map(([name],i)=>new Option(name,i)));
+$("food-values").append(...metrics.map(([name,unit],i)=>nutrientInput("food-"+i,name,unit,i===0)));
+for (const id of ["fast1","fast2"]) $(id).append(...names.map((name,i)=>new Option(name,i)));
+[$("fast1").value,$("fast2").value] = state.settings.days;
+$("fastTarget").value = state.settings.fastChoice;
+$("customFast").value = state.settings.fastChoice==="custom"?state.settings.targets[1][0]:"";
+$("confirmed").checked = state.settings.confirmed;
+for (const [type,title] of ["Regular-day targets","Reduced-day nutrient targets (optional)"].entries()) {
+  const fields = element("div","","fields");
+  metrics.forEach(([name,unit],i) => {
+    if (type===1 && i===0) return;
+    const label = nutrientInput("goal-"+type+"-"+i,name,unit);
+    const input = label.querySelector("input");
+    input.value = state.settings.targets[type][i] ?? "";
+    if (i===0) { input.min="500";input.max="5000"; }
+    fields.append(label);
+  });
+  $("target-fields").append(element("h3",title),fields);
+}
+syncCustom();
+$("fastTarget").onchange = () => { $("confirmed").checked=false; syncCustom(); };
+$("customFast").oninput = () => { $("confirmed").checked=false; };
+$("open-settings").onclick = () => { $("settings").open=true; };
+$("settings-form").onsubmit = event => {
+  event.preventDefault();
+  const days = [Number($("fast1").value),Number($("fast2").value)];
+  if (!validDays(...days)) { message("settings-status","Pick two days with at least one regular day between them, including across weeks."); return; }
+  const fastChoice = $("fastTarget").value;
+  const fast = fastChoice==="custom"?number("customFast"):number("fastTarget");
+  const regular = number("goal-0-0");
+  if (fast!==null && regular!==null && fast>=regular) { message("settings-status","Reduced-day calories must be below regular-day calories."); return; }
+  const targets = [0,1].map(type => metrics.map((_,i)=>type===1 && i===0 ? fast : number("goal-"+type+"-"+i)));
+  state.settings = {days,targets,fastChoice,confirmed:Boolean(fast && $("confirmed").checked)};
+  $("ideas").replaceChildren();
+  persist(); render(); message("settings-status","Settings saved.");
+};
+$("preset").onchange = () => {
+  const val = $("preset").value;
+  if (val!=="") setFood(template(Number(val),number("servings") || 1));
+  else $("basis").textContent = "Enter nutrition facts per serving. Nutrient fields are optional.";
+};
+$("food-form").onsubmit = event => {
+  event.preventDefault();
+  const name = $("food-name").value.trim();
+  if (!name) { message("log-status","Enter a food name."); return; }
+  const preset = number("preset");
+  const row = {name,preset,basis:preset===null?"serving":foods[preset][1],servings:number("servings"),values:metrics.map((_,i)=>number("food-"+i))};
+  const rows = state.log[dateKey(selected)] ??= [];
+  const adding = editing===null;
+  if (adding) rows.push(row); else rows[editing]=row;
+  resetFood(); persist(); render(); message("log-status",adding?"Food added.":"Food updated.");
+};
+$("cancel-edit").onclick = resetFood;
+$("prev").onclick = () => selectDay(shift(selected,-7));
+$("next").onclick = () => selectDay(shift(selected,7));
+$("current").onclick = () => selectDay(new Date());
+$("suggest").onclick = () => preview(false);
+$("suggest-week").onclick = () => preview(true);
+render();
+
+</script></html>
